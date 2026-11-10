@@ -1,14 +1,11 @@
 /**
  * Main-thread side of on-device transcription:
- *  1. downloads the model once (in pieces) and keeps it on the phone (IndexedDB),
+ *  1. downloads the model once (in pieces) and keeps it on the phone (Cache Storage),
  *  2. decodes the video's audio to 16 kHz mono,
  *  3. splits it into <=28 s windows at quiet points and runs the worker.
  */
-import { del, get, set, createStore } from 'idb-keyval';
 import type { Transcript, Word } from '../core/types';
 import { z85Decode } from './z85';
-
-const modelStore = createStore('mila-model', 'files');
 
 export interface ModelManifest {
   version: string;
@@ -61,114 +58,126 @@ export function getManifest(): Promise<ModelManifest> {
   return manifestPromise;
 }
 
+const CACHE_NAME = 'mila-model-v2';
+
+/** Large model files live in Cache Storage (made for big downloads); IndexedDB choked on them on iPhone. */
+async function openCache(): Promise<Cache | null> {
+  try {
+    return 'caches' in self ? await caches.open(CACHE_NAME) : null;
+  } catch {
+    return null;
+  }
+}
+
+let oldStoreCleared = false;
+function clearOldModelStore() {
+  if (oldStoreCleared) return;
+  oldStoreCleared = true;
+  try {
+    indexedDB.deleteDatabase('mila-model'); // earlier versions kept the model here; free that space
+  } catch {
+    /* ignore */
+  }
+}
+
+const abs = (u: string) => new URL(u, document.baseURI).toString();
+
 export async function modelIsDownloaded(): Promise<boolean> {
   try {
     const m = await getManifest();
-    return (await get<string>('version-ab', modelStore)) === m.version || (await get<string>('version', modelStore)) === m.version;
+    const cache = await openCache();
+    if (!cache) return false;
+    const urls = [...Object.values(m.files).flat(), ...m.wasm];
+    for (const u of urls) if (!(await cache.match(abs(u)))) return false;
+    return true;
   } catch {
     return false;
   }
 }
 
-async function fetchParts(urls: string[], onBytes: (n: number) => void): Promise<Blob> {
-  const parts: Blob[] = [];
-  for (const u of urls) {
-    let lastErr: unknown;
-    for (let attempt = 0; attempt < 3; attempt++) {
-      let got = 0;
-      try {
-        const res = await fetch(new URL(u, document.baseURI).toString());
-        if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);
-        if (u.endsWith('.z85.json')) {
-          // Model piece packed as text: {"n": byteLength, "d": "<z85>"}
-          const j = (await res.json()) as { n: number; d: string };
-          const bytes = z85Decode(j.d, j.n);
-          parts.push(new Blob([bytes as BlobPart]));
-          got = bytes.length;
-          onBytes(bytes.length);
-          lastErr = null;
-          break;
-        }
-        // Stream so the progress bar moves during big files.
-        const reader = res.body.getReader();
-        const chunks: Uint8Array[] = [];
-        for (;;) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          chunks.push(value);
-          got += value.length;
-          onBytes(value.length);
-        }
-        parts.push(new Blob(chunks as BlobPart[]));
-        lastErr = null;
-        break;
-      } catch (e) {
-        onBytes(-got); // don't count a failed attempt twice
-        lastErr = e;
-        await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));
+/** Downloads one part (with retries and live progress) and returns its bytes as a Blob. */
+async function downloadPart(u: string, onBytes: (n: number) => void): Promise<Blob> {
+  let lastErr: unknown;
+  for (let attempt = 0; attempt < 4; attempt++) {
+    let got = 0;
+    try {
+      const res = await fetch(abs(u));
+      if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);
+      if (u.endsWith('.z85.json')) {
+        // Model piece packed as text: {"n": byteLength, "d": "<z85>"}
+        const j = (await res.json()) as { n: number; d: string };
+        const bytes = z85Decode(j.d, j.n);
+        onBytes(bytes.length);
+        return new Blob([bytes as BlobPart]);
       }
+      const reader = res.body.getReader();
+      const chunks: Uint8Array[] = [];
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        chunks.push(value);
+        got += value.length;
+        onBytes(value.length);
+      }
+      return new Blob(chunks as BlobPart[]);
+    } catch (e) {
+      onBytes(-got); // don't count a failed attempt twice
+      lastErr = e;
+      await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));
     }
-    if (lastErr) throw new Error('ההורדה של מנוע התמלול נקטעה. בדקי את החיבור ונסי שוב — מה שכבר ירד נשמר.');
   }
-  return new Blob(parts);
+  throw new Error(`ההורדה של מנוע התמלול נקטעה (${(lastErr as Error)?.message ?? lastErr}). בדקי את החיבור ונסי שוב. מה שכבר ירד נשמר.`);
 }
 
-/**
- * Reads a cached model file. Files are stored as ArrayBuffers: on iOS, Blobs kept in IndexedDB
- * can become unreadable after the app is reopened ("The object can not be found here").
- */
-async function readCached(version: string, name: string): Promise<Blob | null> {
-  const key = `ab:${version}:${name}`;
-  try {
-    const ab = await get<ArrayBuffer>(key, modelStore);
-    if (ab instanceof ArrayBuffer && ab.byteLength) return new Blob([ab]);
-  } catch {
-    /* fall through */
-  }
-  // Older versions stored Blobs: migrate if still readable, otherwise drop and download again.
-  try {
-    const old = await get<Blob>(`${version}:${name}`, modelStore);
-    if (old) {
-      const ab = await old.arrayBuffer();
-      await set(key, ab, modelStore);
-      await del(`${version}:${name}`, modelStore);
-      return new Blob([ab]);
-    }
-  } catch {
-    await del(`${version}:${name}`, modelStore).catch(() => undefined);
-  }
-  return null;
-}
-
-/** Download (or read from the phone) every model file. Each finished file is stored, so an interrupted download resumes. */
+/** Download (or read from the phone) every model file. Each finished part is kept, so an interrupted download resumes. */
 async function ensureModelFiles(onStage: (s: EngineStage) => void): Promise<{ files: Record<string, Blob>; wasm: Blob; m: ModelManifest }> {
+  clearOldModelStore();
   const m = await getManifest();
+  const cache = await openCache();
   const entries: [string, string[]][] = [...Object.entries(m.files), ['__ort.wasm', m.wasm]];
-  const files: Record<string, Blob> = {};
+  // Pass 1: what is already on the phone.
+  const have = new Map<string, Blob>();
   let loaded = 0;
-  for (const [name] of entries) {
-    const b = await readCached(m.version, name);
-    if (b) {
-      files[name] = b;
-      loaded += b.size;
+  if (cache) {
+    for (const [, urls] of entries) {
+      for (const u of urls) {
+        try {
+          const r = await cache.match(abs(u));
+          if (r) {
+            const b = await r.blob();
+            have.set(u, b);
+            loaded += b.size;
+          }
+        } catch {
+          /* treat as missing */
+        }
+      }
     }
   }
   onStage({ stage: 'download', loaded, total: m.totalBytes });
+  // Pass 2: download what's missing, keeping each part as it arrives.
+  const files: Record<string, Blob> = {};
   for (const [name, urls] of entries) {
-    if (files[name]) continue;
-    const blob = await fetchParts(urls, (n) => {
-      loaded += n;
-      onStage({ stage: 'download', loaded, total: m.totalBytes });
-    });
-    const ab = await blob.arrayBuffer();
-    try {
-      await set(`ab:${m.version}:${name}`, ab, modelStore);
-    } catch {
-      /* storage full: still usable for this session */
+    const parts: Blob[] = [];
+    for (const u of urls) {
+      let b = have.get(u);
+      if (!b) {
+        b = await downloadPart(u, (n) => {
+          loaded += n;
+          onStage({ stage: 'download', loaded, total: m.totalBytes });
+        });
+        if (cache) {
+          try {
+            await cache.put(abs(u), new Response(b, { headers: { 'content-type': 'application/octet-stream' } }));
+          } catch {
+            /* storage full: still usable for this session */
+          }
+        }
+      }
+      parts.push(b);
     }
-    files[name] = new Blob([ab]);
+    files[name] = new Blob(parts);
   }
-  await set('version-ab', m.version, modelStore);
   const wasm = files['__ort.wasm'];
   delete files['__ort.wasm'];
   return { files, wasm, m };
@@ -216,13 +225,11 @@ async function ensureWorker(onStage: (s: EngineStage) => void): Promise<Worker> 
   worker = new Worker(new URL('./worker.ts', import.meta.url), { type: 'module' });
   try {
     const wasmBuf = await wasm.arrayBuffer();
-    // Send plain ArrayBuffers (transferred, no copy) rather than Blobs.
-    const bufs: Record<string, ArrayBuffer> = {};
-    for (const [k, b] of Object.entries(files)) bufs[k] = await b.arrayBuffer();
+    // Blobs are handed over without copying; the worker reads each file once (lower peak memory).
     const r = await call<{ device: string }>(
       worker,
-      { type: 'load', files: bufs, wasm: wasmBuf, preferGpu: m.gpu !== false, dtype: m.dtype },
-      [wasmBuf, ...Object.values(bufs)],
+      { type: 'load', files, wasm: wasmBuf, preferGpu: m.gpu !== false, dtype: m.dtype },
+      [wasmBuf],
     );
     loadedDevice = r.device;
   } catch (e) {

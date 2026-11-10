@@ -5,7 +5,7 @@
  */
 import { env, pipeline, WhisperTextStreamer } from '@huggingface/transformers';
 
-type Files = Record<string, ArrayBuffer>;
+type Files = Record<string, Blob | ArrayBuffer>;
 type ASR = { tokenizer: unknown } & ((audio: Float32Array, opts: Record<string, unknown>) => Promise<{ text: string; chunks?: { text: string; timestamp: [number, number | null] }[] }>);
 
 const MODEL_ID = 'model';
@@ -18,11 +18,9 @@ function fakeFetch(input: string | URL): Promise<Response> {
   const url = String(input);
   const key = Object.keys(files).find((k) => url.endsWith('/' + k));
   if (!key) return Promise.resolve(new Response('not found', { status: 404 }));
-  const buf = files[key];
-  // a copy, so the stored buffer stays usable if the same file is requested twice
-  return Promise.resolve(
-    new Response(buf.slice(0), { status: 200, headers: { 'content-length': String(buf.byteLength), 'content-type': 'application/octet-stream' } }),
-  );
+  const f = files[key];
+  const size = f instanceof Blob ? f.size : f.byteLength;
+  return Promise.resolve(new Response(f, { status: 200, headers: { 'content-length': String(size), 'content-type': 'application/octet-stream' } }));
 }
 
 async function load(msg: { files: Files; wasm: ArrayBuffer; preferGpu: boolean; dtype: Record<string, string> }) {

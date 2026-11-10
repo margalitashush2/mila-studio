@@ -1,8 +1,24 @@
 /** Persistent storage on the device (IndexedDB). Videos, transcripts and the model never leave the phone. */
-import { createStore, del, get, keys, set } from 'idb-keyval';
+import { createStore, del as idbDel, get as idbGet, keys as idbKeys, set as idbSet, type UseStore } from 'idb-keyval';
 import type { BrandKit, DictionaryEntry, Project } from '../core/types';
 
-const store = createStore('mila-studio', 'kv');
+let store: UseStore = createStore('mila-studio', 'kv');
+
+/** Safari sometimes closes the IndexedDB connection ("connection is closing"); reopen once and retry. */
+async function withRetry<T>(fn: (st: UseStore) => Promise<T>): Promise<T> {
+  try {
+    return await fn(store);
+  } catch (e) {
+    const msg = String((e as Error)?.message ?? e);
+    if (!/closing|closed|InvalidState|connection/i.test(msg)) throw e;
+    store = createStore('mila-studio', 'kv');
+    return fn(store);
+  }
+}
+const get = <T>(k: IDBValidKey, _s?: unknown) => withRetry((st) => idbGet<T>(k, st));
+const set = (k: IDBValidKey, v: unknown, _s?: unknown) => withRetry((st) => idbSet(k, v, st));
+const del = (k: IDBValidKey, _s?: unknown) => withRetry((st) => idbDel(k, st));
+const keys = (_s?: unknown) => withRetry((st) => idbKeys(st));
 const blobCache = new Map<string, Blob>();
 
 export interface Settings {
