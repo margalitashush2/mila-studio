@@ -1,0 +1,37 @@
+{
+ "version": "onnx-community/whisper-small_timestamped@65caa70f:encoder_model_q4.onnx:decoder_model_merged_int8.onnx",
+ "label": "Whisper small (OpenAI), מודל קל",
+ "model": "openai/whisper-small",
+ "dtype": {
+  "encoder_model": "q4",
+  "decoder_model_merged": "int8"
+ },
+ "punctuation": false,
+ "files": {
+  "config.json": [
+   "https://huggingface.co/onnx-community/whisper-small_timestamped/resolve/65caa70f294b46e1c33ff820aae6b16d048ab818/config.json"
+  ],
+  "generation_config.json": [
+   "https://huggingface.co/onnx-community/whisper-small_timestamped/resolve/65caa70f294b46e1c33ff820aae6b16d048ab818/generation_config.json"
+  ],
+  "preprocessor_config.json": [
+   "https://huggingface.co/onnx-community/whisper-small_timestamped/resolve/65caa70f294b46e1c33ff820aae6b16d048ab818/preprocessor_config.json"
+  ],
+  "tokenizer.json": [
+   "https://huggingface.co/onnx-community/whisper-small_timestamped/resolve/65caa70f294b46e1c33ff820aae6b16d048ab818/tokenizer.json"
+  ],
+  "tokenizer_config.json": [
+   "https://huggingface.co/onnx-community/whisper-small_timestamped/resolve/65caa70f294b46e1c33ff820aae6b16d048ab818/tokenizer_config.json"
+  ],
+  "onnx/encoder_model_q4.onnx": [
+   "https://huggingface.co/onnx-community/whisper-small_timestamped/resolve/65caa70f294b46e1c33ff820aae6b16d048ab818/onnx/encoder_model_q4.onnx"
+  ],
+  "onnx/decoder_model_merged_int8.onnx": [
+   "https://huggingface.co/onnx-community/whisper-small_timestamped/resolve/65caa70f294b46e1c33ff820aae6b16d048ab818/onnx/decoder_model_merged_int8.onnx"
+  ]
+ },
+ "wasm": [
+  "model/ort-asyncify.wasm"
+ ],
+ "totalBytes": 252605626
+}

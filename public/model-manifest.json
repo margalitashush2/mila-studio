@@ -1,0 +1,37 @@
+{
+ "version": "instush/ivrit-whisper-large-v3-turbo-timestamped-onnx@c71eadac:encoder_model_q4.onnx:decoder_model_merged_q4.onnx",
+ "label": "ivrit.ai Whisper large-v3-turbo (מודל עברי מאומן על כ-5,000 שעות עברית)",
+ "model": "ivrit-ai/whisper-large-v3-turbo",
+ "dtype": {
+  "encoder_model": "q4",
+  "decoder_model_merged": "q4"
+ },
+ "punctuation": true,
+ "files": {
+  "config.json": [
+   "https://huggingface.co/instush/ivrit-whisper-large-v3-turbo-timestamped-onnx/resolve/c71eadaca74c0923a06632bdaeb7413ff9cff4cf/config.json"
+  ],
+  "generation_config.json": [
+   "https://huggingface.co/instush/ivrit-whisper-large-v3-turbo-timestamped-onnx/resolve/c71eadaca74c0923a06632bdaeb7413ff9cff4cf/generation_config.json"
+  ],
+  "preprocessor_config.json": [
+   "https://huggingface.co/instush/ivrit-whisper-large-v3-turbo-timestamped-onnx/resolve/c71eadaca74c0923a06632bdaeb7413ff9cff4cf/preprocessor_config.json"
+  ],
+  "tokenizer.json": [
+   "https://huggingface.co/instush/ivrit-whisper-large-v3-turbo-timestamped-onnx/resolve/c71eadaca74c0923a06632bdaeb7413ff9cff4cf/tokenizer.json"
+  ],
+  "tokenizer_config.json": [
+   "https://huggingface.co/instush/ivrit-whisper-large-v3-turbo-timestamped-onnx/resolve/c71eadaca74c0923a06632bdaeb7413ff9cff4cf/tokenizer_config.json"
+  ],
+  "onnx/encoder_model_q4.onnx": [
+   "https://huggingface.co/instush/ivrit-whisper-large-v3-turbo-timestamped-onnx/resolve/c71eadaca74c0923a06632bdaeb7413ff9cff4cf/onnx/encoder_model_q4.onnx"
+  ],
+  "onnx/decoder_model_merged_q4.onnx": [
+   "https://huggingface.co/instush/ivrit-whisper-large-v3-turbo-timestamped-onnx/resolve/c71eadaca74c0923a06632bdaeb7413ff9cff4cf/onnx/decoder_model_merged_q4.onnx"
+  ]
+ },
+ "wasm": [
+  "model/ort-asyncify.wasm"
+ ],
+ "totalBytes": 790128762
+}
