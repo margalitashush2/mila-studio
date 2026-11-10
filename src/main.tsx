@@ -11,6 +11,23 @@ import { requestPersistence } from './services/db';
 document.documentElement.dir = 'rtl';
 document.documentElement.lang = 'he';
 registerBuiltinFonts();
+
+/** Phones keep old copies of the page for a while; load the newest version as soon as it exists. */
+const APP_VERSION = '12';
+void fetch(new URL('version.json?t=' + Date.now(), document.baseURI).toString(), { cache: 'no-store' })
+  .then((r) => (r.ok ? r.json() : null))
+  .then((j: { v?: string } | null) => {
+    if (!j?.v || j.v === APP_VERSION) return;
+    const key = 'mila-reloaded-for-' + j.v;
+    try {
+      if (sessionStorage.getItem(key)) return;
+      sessionStorage.setItem(key, '1');
+    } catch {
+      return;
+    }
+    location.replace(location.pathname + '?v=' + j.v);
+  })
+  .catch(() => undefined);
 void ensureFont('Heebo-Regular');
 void ensureFont('Heebo-Bold');
 void ensureFont('SecularOne-Regular');
