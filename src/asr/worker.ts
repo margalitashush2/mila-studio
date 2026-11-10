@@ -59,6 +59,7 @@ async function load(msg: { files: Files; wasm: ArrayBuffer; preferGpu: boolean; 
         dtype: msg.dtype as never,
       })) as unknown as ASR;
       device = d;
+      files = {}; // the sessions hold their own copies now; let the downloaded files be freed
       return;
     } catch (e) {
       lastErr = e;

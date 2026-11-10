@@ -80,6 +80,20 @@ function clearOldModelStore() {
   }
 }
 
+let gpuCheck: Promise<boolean> | null = null;
+/** WebGPU present and usable (the accurate engine needs it; on the CPU it uses too much memory on phones). */
+export function gpuAvailable(): Promise<boolean> {
+  gpuCheck ??= (async () => {
+    try {
+      const gpu = (navigator as Navigator & { gpu?: { requestAdapter(): Promise<unknown> } }).gpu;
+      return !!(gpu && (await gpu.requestAdapter()));
+    } catch {
+      return false;
+    }
+  })();
+  return gpuCheck;
+}
+
 const PENDING_KEY = 'mila-quality-loading';
 function markPending(on: boolean) {
   try {
@@ -242,8 +256,6 @@ async function ensureWorker(onStage: (s: EngineStage) => void): Promise<Worker> 
   if (worker && loadedDevice) return worker;
   const { files, wasm, m } = await ensureModelFiles(onStage);
   onStage({ stage: 'loading' });
-  // If the phone kills the page while the big engine loads, the next start sees this mark and uses the light one.
-  if (choice === 'quality') markPending(true);
   worker = new Worker(new URL('./worker.ts', import.meta.url), { type: 'module' });
   try {
     const wasmBuf = await wasm.arrayBuffer();
@@ -254,9 +266,7 @@ async function ensureWorker(onStage: (s: EngineStage) => void): Promise<Worker> 
       [wasmBuf],
     );
     loadedDevice = r.device;
-    markPending(false);
   } catch (e) {
-    markPending(false);
     worker.terminate();
     worker = null;
     throw new Error('לא הצלחנו להפעיל את מנוע התמלול במכשיר הזה: ' + (e as Error).message);
@@ -303,9 +313,17 @@ export async function transcribeOnDevice(
   onStage: (s: EngineStage) => void,
   onNote?: (msg: string) => void,
 ): Promise<Transcript> {
+  if (choice === 'quality' && !(await gpuAvailable())) {
+    onNote?.('הטלפון הזה לא תומך בהאצה שהמנוע המדויק צריך, ולכן משתמשים במנוע הקל.');
+    setEngineChoice('light');
+  }
   try {
-    return await transcribeWith(audio, onStage);
+    if (choice === 'quality') markPending(true);
+    const t = await transcribeWith(audio, onStage);
+    markPending(false);
+    return t;
   } catch (e) {
+    markPending(false);
     const msg = (e as Error)?.message ?? String(e);
     if (choice !== 'quality' || /ההורדה|HTTP/.test(msg)) throw e;
     onNote?.('המנוע המדויק כבד מדי לטלפון הזה, עוברים למנוע הקל. (' + msg.slice(0, 120) + ')');
