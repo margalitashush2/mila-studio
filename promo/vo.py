@@ -37,8 +37,11 @@ def trim(w, sr, thr=0.01):
     return w[max(0, idx[0] - pad): idx[-1] + pad]
 
 
-meta = {}
+ONLY = [x for x in os.environ.get('ONLY', '').split(',') if x]
+meta = json.load(open(f'{OUT}/vo.json')) if ONLY and os.path.exists(f'{OUT}/vo.json') else {}
 for p in PHRASES:
+    if ONLY and p['id'] not in ONLY:
+        continue
     best = None
     ids = tok(p['tts'], return_tensors="pt")
     for sd in SEEDS:

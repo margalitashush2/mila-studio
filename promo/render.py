@@ -338,15 +338,12 @@ LABELS = {k: chip(PRODUCTS[k][2], 46) for k in PRODUCTS}
 logo_img = Image.open(f'{A}/logo.png').convert('RGBA')
 
 
-def logo_sprite(width, color=(255, 255, 255)):
+def logo_sprite(width):
     im = logo_img.resize((width, int(logo_img.height * width / logo_img.width)), Image.LANCZOS)
-    col = Image.new('RGBA', im.size, color + (0,))
-    col.putalpha(im.getchannel('A'))
-    return to_sprite(col)
+    return to_sprite(im)
 
 
-LOGO_BIG = logo_sprite(760, (255, 250, 240))
-LOGO_MID = logo_sprite(470, (255, 250, 240))
+LOGO_BIG = logo_sprite(620)
 LOGO_GLOW = cv2.GaussianBlur(LOGO_BIG, (0, 0), 18)
 LOGO_GLOW[..., :3] = LOGO_GLOW[..., 3:4] * np.array(GOLD, np.float32) / 255
 
@@ -388,7 +385,7 @@ for sec, (s0, s1) in SEC_WIN.items():
     t = s0
     for p in ph:
         if p['id'] == '3c':  # sync with the 15-minute timer; keep the real recording on screen >= 8s
-            t = max(t, 27.4)
+            t = max(t, 27.0)
         TL[p['id']] = (t, t + VO[p['id']]['dur'])
         t += VO[p['id']]['dur'] + gap
 json.dump(TL, open(f'{A}/timeline.json', 'w'), indent=1)
@@ -658,17 +655,15 @@ def scene2(t):
         x = t - 7.0
         a = eo(prog(x, 0.0, 0.7))
         s = lerp(1.12, 1.0, eo(prog(x, 0, 1.6)))
-        place(f, LOGO_GLOW, W / 2, 840, s=s, op=a * (0.6 + 0.3 * math.sin(t * 3)))
-        place(f, LOGO_BIG, W / 2, 840, s=s, op=a)
+        place(f, LOGO_GLOW, W / 2, 800, s=s, op=a * (0.45 + 0.2 * math.sin(t * 3)))
+        place(f, LOGO_BIG, W / 2, 800, s=s, op=a)
         # glint sweep across logo
         gx = lerp(-300, W + 300, prog(x, 0.5, 1.6))
         if 0.5 < x < 1.6:
-            band = np.exp(-((xx[400:1300] - gx - (yy[400:1300] - 840) * 0.35) / 60) ** 2)[..., None]
-            lg = np.zeros((900, W, 3), np.float32)
-            place_rgb(lg, LOGO_BIG, W / 2, 450, s)
-            f[400:1300] += lg * band * 0.9
-        place(f, text_sprite('מאדם לאדם · באהבה · בחינם', H7, 50, fill=GOLD_L, shadow=0.6), W / 2, 1300,
-              op=eo(prog(x, 0.9, 1.4)) * (1 - prog(t, m0 - 0.25, m0)))
+            band = np.exp(-((xx[300:1300] - gx - (yy[300:1300] - 800) * 0.35) / 60) ** 2)[..., None]
+            lg = np.zeros((1000, W, 3), np.float32)
+            place_rgb(lg, LOGO_BIG, W / 2, 500, s)
+            f[300:1300] += lg * band * 0.6
         flash(f, t, 7.0, 0.3, 0.5)
         if t > m0 - 0.25:  # push out
             f *= 1 - prog(t, m0 - 0.25, m0) * 0.8
@@ -845,13 +840,13 @@ def timer(f, t, t0):
     place(f, text_sprite('חלון של 15 דקות בלבד', H9, 70, fill=(255, 255, 255), shadow=0.8), cx, 400,
           op=eo(prog(x, 0.2, 0.6)), s=lerp(0.8, 1, spring(prog(x, 0.2, 0.8))))
     td = T('3d')
-    place(f, text_sprite('המוצרים נחטפים במהירות!', H9, 64, fill=RED, shadow=0.8, stroke=0), cx, 1270,
+    place(f, text_sprite('המוצרים נמסרים במהירות!', H9, 64, fill=GOLD_L, shadow=0.8, stroke=0), cx, 1270,
           op=eo(prog(t, td, td + 0.25)), s=lerp(1.3, 1, eo(prog(t, td, td + 0.3))))
-    # "נחטף!" stamp
+    # "נמסר!" stamp
     st = tend - 0.15
     if t > st:
         sp = spring(prog(t, st, st + 0.5), 8, 1.5)
-        stamp = text_sprite('נחטף!', H9, 170, fill=RED, shadow=0.9, stroke=10, stroke_fill=(255, 255, 255))
+        stamp = text_sprite('נמסר!', H9, 170, fill=WA, shadow=0.9, stroke=10, stroke_fill=(255, 255, 255))
         place(f, stamp, cx + 10, cy - 10, s=lerp(2.2, 1, clamp(sp)), rot=-14, op=clamp(sp * 1.5))
 
 
@@ -951,18 +946,18 @@ def scene5(t):
     x = t - 46.0
     # phase A: big logo reveal 46-50.2, then move up
     mv = eio(prog(x, 4.0, 4.8))
-    ly = lerp(820, 380, mv)
+    ly = lerp(810, 400, mv)
     ls = lerp(1.0, 0.56, mv)
     a = eo(prog(x, 0.1, 0.9))
     s0 = lerp(1.1, 1.0, eo(prog(x, 0, 2.0)))
-    place(f, LOGO_GLOW, W / 2, ly, s=ls * s0, op=a * (0.55 + 0.25 * math.sin(t * 2.5)))
+    place(f, LOGO_GLOW, W / 2, ly, s=ls * s0, op=a * (0.4 + 0.2 * math.sin(t * 2.5)))
     place(f, LOGO_BIG, W / 2, ly, s=ls * s0, op=a)
     if 0.6 < x < 1.9:
         gx = lerp(-300, W + 300, prog(x, 0.6, 1.9))
         band = np.exp(-((xx[300:1400] - gx - (yy[300:1400] - 820) * 0.35) / 60) ** 2)[..., None]
         lg = np.zeros((1100, W, 3), np.float32)
         place_rgb(lg, LOGO_BIG, W / 2, ly - 300, ls * s0)
-        f[300:1400] += lg * band
+        f[300:1400] += lg * band * 0.6
     # gold frame lines
     fl = eo(prog(x, 0.3, 1.5))
     for yline in (130, H - 70):
@@ -1014,6 +1009,7 @@ def scene5(t):
         a = eo(prog(t, tbtn + 0.5, tbtn + 1.0))
         place(f, text_sprite('לחצו על הקישור להצטרפות', H4, 32, fill=GOLD_L), W / 2, 1405, op=a)
         place(f, LINK_BOX, W / 2, 1495, op=a)
+        place(f, text_sprite('לפרטים: 050-816-5833', H7, 38, fill=GOLD_L), W / 2, 1600, op=a)
     flash(f, t, 46.0, 0.35, 0.5)
     # final fade
     f *= 1 - eio(prog(t, 59.2, 60.0))
