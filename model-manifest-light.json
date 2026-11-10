@@ -1,0 +1,40 @@
+{
+ "version": "openai/whisper-small:encoder_model_q4.onnx:decoder_model_merged_q4.onnx",
+ "label": "Whisper small (קל ומהיר)",
+ "model": "openai/whisper-small",
+ "dtype": {
+  "encoder_model": "q4",
+  "decoder_model_merged": "q4"
+ },
+ "punctuation": false,
+ "files": {
+  "config.json": [
+   "model-light/config.json.00.bin"
+  ],
+  "generation_config.json": [
+   "model-light/generation_config.json.00.bin"
+  ],
+  "preprocessor_config.json": [
+   "model-light/preprocessor_config.json.00.bin"
+  ],
+  "tokenizer.json": [
+   "model-light/tokenizer.json.00.bin"
+  ],
+  "tokenizer_config.json": [
+   "model-light/tokenizer_config.json.00.bin"
+  ],
+  "onnx/encoder_model_q4.onnx": [
+   "model-light/onnx__encoder_model_q4.onnx.00.bin",
+   "model-light/onnx__encoder_model_q4.onnx.01.bin"
+  ],
+  "onnx/decoder_model_merged_q4.onnx": [
+   "model-light/onnx__decoder_model_merged_q4.onnx.00.bin",
+   "model-light/onnx__decoder_model_merged_q4.onnx.01.bin",
+   "model-light/onnx__decoder_model_merged_q4.onnx.02.bin"
+  ]
+ },
+ "wasm": [
+  "model-light/ort-asyncify.wasm.00.bin"
+ ],
+ "totalBytes": 209993808
+}

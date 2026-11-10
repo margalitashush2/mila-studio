@@ -1,0 +1,48 @@
+{
+ "version": "ivrit-ai/whisper-large-v3-turbo:encoder_model_q4.onnx:decoder_model_merged_q4.onnx",
+ "label": "ivrit.ai Whisper large-v3-turbo (מודל עברי מדויק)",
+ "model": "ivrit-ai/whisper-large-v3-turbo",
+ "dtype": {
+  "encoder_model": "q4",
+  "decoder_model_merged": "q4"
+ },
+ "punctuation": true,
+ "files": {
+  "config.json": [
+   "model/config.json.00.bin"
+  ],
+  "generation_config.json": [
+   "model/generation_config.json.00.bin"
+  ],
+  "preprocessor_config.json": [
+   "model/preprocessor_config.json.00.bin"
+  ],
+  "tokenizer.json": [
+   "model/tokenizer.json.00.bin"
+  ],
+  "tokenizer_config.json": [
+   "model/tokenizer_config.json.00.bin"
+  ],
+  "onnx/encoder_model_q4.onnx": [
+   "model/onnx__encoder_model_q4.onnx.00.bin",
+   "model/onnx__encoder_model_q4.onnx.01.bin",
+   "model/onnx__encoder_model_q4.onnx.02.bin",
+   "model/onnx__encoder_model_q4.onnx.03.bin",
+   "model/onnx__encoder_model_q4.onnx.04.bin",
+   "model/onnx__encoder_model_q4.onnx.05.bin",
+   "model/onnx__encoder_model_q4.onnx.06.bin",
+   "model/onnx__encoder_model_q4.onnx.07.bin",
+   "model/onnx__encoder_model_q4.onnx.08.bin",
+   "model/onnx__encoder_model_q4.onnx.09.bin"
+  ],
+  "onnx/decoder_model_merged_q4.onnx": [
+   "model/onnx__decoder_model_merged_q4.onnx.00.bin",
+   "model/onnx__decoder_model_merged_q4.onnx.01.bin",
+   "model/onnx__decoder_model_merged_q4.onnx.02.bin"
+  ]
+ },
+ "wasm": [
+  "model/ort-asyncify.wasm.00.bin"
+ ],
+ "totalBytes": 591223006
+}
