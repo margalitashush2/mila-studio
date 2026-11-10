@@ -8,6 +8,7 @@ import { extractSpeech16k, type AudioCapture } from '../asr/audioExtract';
 import type { EngineStage } from '../asr/engine';
 import { getVideo } from './videoSource';
 import { correctTranscript, getSample } from './claudeFix';
+import { transcribeCloud } from './cloudTranscribe';
 import { useApp } from '../state/store';
 
 function loadVideoMeta(url: string): Promise<{ v: HTMLVideoElement; duration: number; width: number; height: number }> {
@@ -160,7 +161,15 @@ export async function runTranscription(capture: AudioCapture): Promise<void> {
         capture.close();
       }
     }
-    const transcript: Transcript = await transcribeOnDevice(audio!, onStage, (msg) => {
+    const key = useApp.getState().settings.elevenLabsKey?.trim();
+    const transcript: Transcript = key
+      ? await (async () => {
+          setJob({ status: 'transcribe', startedAt, progress: 0, detail: 'שולח את השמע לתמלול מדויק בענן…' });
+          return transcribeCloud(audio!, key, [], (f) =>
+            setJob({ status: 'transcribe', startedAt, progress: f < 1 ? f : undefined, detail: f < 1 ? 'שולח את השמע…' : 'מתמלל… (בדרך כלל כמה שניות)' }),
+          );
+        })()
+      : await transcribeOnDevice(audio!, onStage, (msg) => {
       useApp.getState().showToast(msg);
       void useApp.getState().setSettings({ engine: 'light' });
     });

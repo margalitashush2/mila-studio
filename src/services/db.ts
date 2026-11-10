@@ -23,10 +23,12 @@ const blobCache = new Map<string, Blob>();
 
 export interface Settings {
   exportQuality: 720 | 1080 | 2160;
+  /** ElevenLabs API key: when set, transcription runs in the cloud (accurate, fast) */
+  elevenLabsKey: string;
   engine: 'quality' | 'light';
 }
 
-export const DEFAULT_SETTINGS: Settings = { exportQuality: 1080, engine: 'quality' };
+export const DEFAULT_SETTINGS: Settings = { exportQuality: 1080, engine: 'quality', elevenLabsKey: '' };
 
 export async function requestPersistence() {
   try {

@@ -240,3 +240,5 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--honey); out
 .tbar-text { text-align: start; background: var(--surface); border: 1px dashed var(--line); border-radius: 12px; padding: 10px 12px; font-size: 16px; line-height: 1.5; min-height: 48px; }
 .tbar-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .version-tag { color: var(--faint); font-size: 12px; text-align: center; }
+
+.steps { margin: 0; padding-inline-start: 20px; display: grid; gap: 6px; font-size: 15px; color: var(--text); }

@@ -9,6 +9,7 @@ import type { Project, ProjectKind } from '../core/types';
 
 export function Home({ go }: { go: (s: 'brand' | 'dictionary' | 'settings') => void }) {
   const { projects, open, refreshProjects, showToast } = useApp();
+  const hasKey = useApp((s) => !!s.settings.elevenLabsKey?.trim());
   const [busy, setBusy] = useState<ProjectKind | null>(null);
   const [step, setStep] = useState('טוען את הסרטון…');
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
@@ -43,6 +44,11 @@ export function Home({ go }: { go: (s: 'brand' | 'dictionary' | 'settings') => v
         <p className="lede">תמלול עברית, כתוביות ועריכת וידאו. הכול על הטלפון.</p>
       </header>
 
+      {!hasKey && (
+        <button className="banner" onClick={() => go('settings')} style={{ textAlign: 'start' }}>
+          <b>✨ לתמלול מדויק בעברית:</b> חברי את ElevenLabs בהגדרות. זה לוקח 2 דקות. לחצי כאן.
+        </button>
+      )}
       <div className="mode-grid">
         <button className="mode-card primary" onClick={() => void start('transcribe')} disabled={!!busy}>
           <span className="glyph">{Icon.captions}</span>
@@ -89,7 +95,7 @@ export function Home({ go }: { go: (s: 'brand' | 'dictionary' | 'settings') => v
         )}
       </section>
 
-      <p className="version-tag">גרסה 13</p>
+      <p className="version-tag">גרסה 14</p>
       <nav className="links">
         <button className="link-tile" onClick={() => go('brand')}>{Icon.brand}<span>המיתוג שלי</span></button>
         <button className="link-tile" onClick={() => go('dictionary')}>{Icon.book}<span>מילון אישי</span></button>

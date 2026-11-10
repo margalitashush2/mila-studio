@@ -153,8 +153,9 @@ export function SettingsScreen({ back }: { back: () => void }) {
   return (
     <div className="screen">
       <Top title="הגדרות" back={back} />
+      <CloudKeySection />
       <section className="status-card">
-        <b>מנוע התמלול</b>
+        <b>מנוע התמלול על הטלפון (כשאין מפתח)</b>
         <Segmented
           value={settings.engine}
           onChange={async (v) => {
@@ -187,5 +188,66 @@ export function SettingsScreen({ back }: { back: () => void }) {
       </section>
       <Toggle label="שמירה אוטומטית" value onChange={() => showToast('השמירה האוטומטית תמיד פעילה')} />
     </div>
+  );
+}
+
+export function CloudKeySection() {
+  const { settings, setSettings, showToast } = useApp();
+  const [key, setKey] = useState(settings.elevenLabsKey ?? '');
+  const [status, setStatus] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const save = async () => {
+    const k = key.trim();
+    await setSettings({ elevenLabsKey: k });
+    if (!k) return showToast('המפתח נמחק. התמלול יחזור לרוץ על הטלפון.');
+    setBusy(true);
+    setStatus('בודק את המפתח…');
+    try {
+      const res = await fetch('https://api.elevenlabs.io/v1/user/subscription', { headers: { 'xi-api-key': k } });
+      if (res.ok) {
+        const j = await res.json();
+        const left = j.character_limit != null && j.character_count != null ? j.character_limit - j.character_count : null;
+        setStatus(`✅ המפתח עובד! מסלול: ${j.tier ?? 'free'}${left != null ? ` · נותרו ${left.toLocaleString('he-IL')} קרדיטים החודש` : ''}`);
+      } else if (res.status === 401) {
+        setStatus('❌ המפתח לא תקין. העתיקי אותו שוב במלואו.');
+      } else {
+        setStatus('✅ המפתח נשמר. (לא הצלחנו לבדוק את יתרת הקרדיטים, זה בסדר.)');
+      }
+    } catch {
+      setStatus('✅ המפתח נשמר. (אין כרגע חיבור לבדיקה.)');
+    } finally {
+      setBusy(false);
+    }
+  };
+  const connected = !!settings.elevenLabsKey?.trim();
+  return (
+    <section className="status-card">
+      <b>✨ תמלול מדויק בעברית (ElevenLabs) {connected ? '· מחובר' : ''}</b>
+      <p className="hint">מדויק מאוד בעברית, עם פיסוק והפרדת דוברים, ומחזיר תוצאה תוך שניות. הטלפון שולח רק את השמע.</p>
+      {!connected && (
+        <ol className="steps">
+          <li>היכנסי ל־<b>elevenlabs.io</b> ולחצי <b>Sign up</b>, ואז <b>Continue with Google</b>.</li>
+          <li>אחרי ההרשמה, בתפריט בחרי <b>Developers</b> ואז <b>API Keys</b>.</li>
+          <li>לחצי <b>Create API Key</b>, תני שם (למשל mila), ולחצי <b>Create</b>.</li>
+          <li>לחצי על סמל ההעתקה ליד המפתח, הדביקי אותו כאן ולחצי <b>שמירה</b>.</li>
+        </ol>
+      )}
+      <input
+        className="text-input ltr"
+        type="password"
+        autoComplete="off"
+        placeholder="הדביקי כאן את המפתח (sk_...)"
+        value={key}
+        onChange={(e) => setKey(e.target.value)}
+        aria-label="מפתח ElevenLabs"
+      />
+      <div className="row">
+        <button className="btn primary" onClick={() => void save()} disabled={busy}>שמירה ובדיקה</button>
+        {connected && (
+          <button className="btn danger" onClick={() => { setKey(''); void setSettings({ elevenLabsKey: '' }); setStatus(null); }}>מחיקת המפתח</button>
+        )}
+      </div>
+      {status && <p className="hint">{status}</p>}
+    </section>
   );
 }

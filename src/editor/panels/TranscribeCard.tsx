@@ -24,6 +24,7 @@ const LABEL: Record<string, string> = {
 
 export function TranscribeCard() {
   const job = useApp((s) => s.current?.transcriptionJob);
+  const cloud = useApp((s) => !!s.settings.elevenLabsKey?.trim());
   const [downloaded, setDownloaded] = useState<boolean | null>(null);
   const [busy, setBusy] = useState(false);
   const [sizeMb, setSizeMb] = useState<number | null>(null);
@@ -61,7 +62,8 @@ export function TranscribeCard() {
           <Progress value={job.progress} />
           {job.status === 'download' && job.progress != null && <p className="hint">{Math.round(job.progress * 100)}% · ההורדה נשמרת גם אם תיסגר האפליקציה</p>}
           {job.status === 'audio' && job.progress != null && <p className="hint">קורא את השמע מהסרטון בזמן אמת ({Math.round(job.progress * 100)}%). השאירי את המסך פתוח.</p>}
-          {job.status === 'transcribe' && (
+          {job.status === 'transcribe' && cloud && <p className="hint">{job.detail ?? 'מתמלל…'}</p>}
+          {job.status === 'transcribe' && !cloud && (
             <>
               <p className="hint">
                 {job.detail ? `${job.detail} · ` : ''}עברו {formatTime((Date.now() - job.startedAt) / 1000)} · התמלול רץ על הטלפון ולוקח בערך פי 2–4 מאורך הסרטון. השאירי את המסך פתוח.
@@ -75,8 +77,8 @@ export function TranscribeCard() {
           {job?.status === 'failed' && <div className="banner error">{job.error}</div>}
           <b>התמלול עוד לא נעשה</b>
           <p className="hint">
-            התמלול רץ על הטלפון עצמו, בחינם ובפרטיות מלאה.
-            {downloaded === false && ` בפעם הראשונה נטען מנוע התמלול${sizeMb ? ` (כ-${sizeMb}MB)` : ''}, ולכן עדיף להיות מחוברים ל-Wi-Fi.`}
+            {cloud ? 'תמלול מדויק בעברית דרך ElevenLabs. לוקח בדרך כלל פחות מדקה.' : 'התמלול רץ על הטלפון עצמו.'}
+            {!cloud && downloaded === false && ` בפעם הראשונה נטען מנוע התמלול${sizeMb ? ` (כ-${sizeMb}MB)` : ''}, ולכן עדיף להיות מחוברים ל-Wi-Fi.`}
           </p>
           <button className="btn primary block" onClick={start}>
             {Icon.mic} {job?.status === 'failed' ? 'לנסות שוב' : 'תמלול הסרטון'}

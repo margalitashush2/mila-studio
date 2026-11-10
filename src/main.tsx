@@ -13,7 +13,7 @@ document.documentElement.lang = 'he';
 registerBuiltinFonts();
 
 /** Phones keep old copies of the page for a while; load the newest version as soon as it exists. */
-const APP_VERSION = '13';
+const APP_VERSION = '14';
 void fetch(new URL('version.json?t=' + Date.now(), document.baseURI).toString(), { cache: 'no-store' })
   .then((r) => (r.ok ? r.json() : null))
   .then((j: { v?: string } | null) => {
