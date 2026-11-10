@@ -11,24 +11,23 @@ SR = 48000
 music, sr = sf.read(f'{A}/music.wav', dtype='float32')
 assert sr == SR
 N = len(music)
-TL = json.load(open(f'{A}/timeline.json'))
+TLJ = json.load(open(f'{A}/timeline.json'))
 
 vo = np.zeros(N, np.float32)
 active = np.zeros(N, np.float32)
-for pid, (t0, t1) in TL.items():
-    w, _ = sf.read(f'{A}/vo/{pid}.wav', dtype='float32')
-    # voice chain: high-pass, presence lift, gentle compression
-    w = sosfilt(butter(2, 90, 'high', fs=SR, output='sos'), w)
+for first, (t0, path) in TLJ['groups'].items():
+    w, _ = sf.read(f'{A}/{path}', dtype='float32')
+    if w.ndim > 1:
+        w = w.mean(1)
+    w = sosfilt(butter(2, 80, 'high', fs=SR, output='sos'), w)
     pres = sosfilt(butter(2, [2500, 6000], 'band', fs=SR, output='sos'), w)
-    w = w + 0.35 * pres
-    env = np.sqrt(fftconvolve(w ** 2, np.ones(480) / 480, 'same')) + 1e-6
-    gain = np.minimum(1.0, (0.18 / env) ** 0.4)
-    w = w * gain
+    w = w + 0.2 * pres
     w = w / (np.abs(w).max() + 1e-9) * 0.95
     i = int(t0 * SR)
     j = min(N, i + len(w))
     vo[i:j] += w[: j - i]
-    active[i:j] = 1
+for pid, (p0, p1) in TLJ['phr'].items():
+    active[int(p0 * SR):int(p1 * SR)] = 1
 
 # smooth ducking envelope (attack 120ms, release 450ms)
 duck = np.zeros(N, np.float32)

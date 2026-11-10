@@ -13,10 +13,17 @@ import sys
 import numpy as np
 from scipy.signal import butter, sosfilt, fftconvolve
 
+import json, os
 SR = 48000
-DUR = 60.0
+TLJ = json.load(open(sys.argv[2])) if len(sys.argv) > 2 else None
+DUR = TLJ['END'] if TLJ else 60.0
 N = int(SR * DUR)
-BPM = 96
+BPM = TLJ['bpm'] if TLJ else 96
+_B = {int(k): v for k, v in TLJ['B'].items()} if TLJ else {1: 0, 2: 7.0, 3: 18.0, 4: 34.0, 5: 46.0}
+_P = TLJ['phr'] if TLJ else {'3c': [27.0, 31.0], '5c': [52, 55]}
+B2, B3, B4, B5 = _B[2], _B[3], _B[4], _B[5]
+T3C = _P['3c'][0]
+FINAL = _P['5c'][1] + 0.3
 BEAT = 60 / BPM
 BAR = BEAT * 4
 rng = np.random.default_rng(7)
@@ -160,9 +167,10 @@ prog_c = [F, C, G, AM]
 
 
 def chord_at(bar):
-    if bar < 13:
+    t = bar * BAR
+    if t < B4 - BAR / 2:
         return prog_a[bar % 4]
-    if bar < 18:
+    if t < B5 - BAR / 2:
         return prog_b[bar % 4]
     return prog_c[bar % 4]
 
@@ -176,41 +184,41 @@ def build():
         t0 = b * BAR
         ch = chord_at(b)
         # pad everywhere (lighter in tension)
-        bright = 900 if t0 < 7 else (1200 if 26 <= t0 < 34 else 2200)
-        g = 0.8 if 18 <= t0 < 34 else 1.0
+        bright = 900 if t0 < B2 else (1200 if T3C <= t0 < B4 else 2200)
+        g = 0.8 if B3 <= t0 < B4 else 1.0
         add(mus, pad([n + 12 for n in ch], BAR + 0.6, bright), t0, g)
         # piano arpeggio
         arp = [ch[0] + 12, ch[1] + 12, ch[2] + 12, ch[1] + 24 - 12, ch[0] + 24, ch[2] + 12, ch[1] + 12, ch[2] + 24 - 12]
-        if t0 < 56:
+        if t0 < FINAL:
             for i, n in enumerate(arp):
-                v = 0.55 if t0 < 7 else (0.45 if 18 <= t0 < 34 else 0.7)
+                v = 0.55 if t0 < B2 else (0.45 if B3 <= t0 < B4 else 0.7)
                 add(mus, piano(n, 1.8, v), t0 + i * BEAT / 2)
         # bass from 7s
-        if 7 <= t0 < 56 and not (26 <= t0 < 33.5):
+        if B2 - BAR < t0 < FINAL and not (T3C - BAR < t0 < B4 - BAR):
             root = ch[0] - 24 if ch[0] - 24 >= 28 else ch[0] - 12
             for i in range(4):
                 add(mus, bass(root, BEAT * 0.95), t0 + i * BEAT, 0.9 if i % 2 == 0 else 0.6)
-        if 26 <= t0 < 34:
+        if T3C - BAR < t0 < B4:
             root = ch[0] - 24 if ch[0] - 24 >= 28 else ch[0] - 12
             for i in range(8):
                 add(mus, bass(root, BEAT * 0.45), t0 + i * BEAT / 2, 0.55)
         # sparkles in benefits section
-        if 34 <= t0 < 56:
+        if B4 - BAR < t0 < FINAL:
             for i, n in enumerate([ch[2] + 24, ch[1] + 24, ch[0] + 36, ch[2] + 36]):
                 add(mus, sparkle(n), t0 + i * BEAT + BEAT / 2)
     # drums
-    t = 7.0
-    while t < 56.5:
-        beat_i = int(round((t - 7.0) / BEAT))
-        in_tension = 26 <= t < 34
-        in_light = 18 <= t < 26
+    t = B2
+    while t < FINAL:
+        beat_i = int(round((t - B2) / BEAT))
+        in_tension = T3C <= t < B4
+        in_light = B3 <= t < T3C
         if not in_tension:
             if beat_i % 1 == 0 and not (in_light and beat_i % 2 == 1):
                 add(drums, kick(), t, 0.8 if in_light else 1.0)
             if beat_i % 2 == 1:
                 add(drums, clap(), t, 0.7 if in_light else 1.0)
             add(drums, hat(), t + BEAT / 2, 0.8)
-            if t >= 34:
+            if t >= B4:
                 add(drums, hat(), t, 0.5)
                 if beat_i % 4 == 3:
                     add(drums, hat(True), t + BEAT / 2, 0.6)
@@ -223,25 +231,25 @@ def build():
                 add(drums, kick(), t + 0.16, 0.45)
         t += BEAT
     # FX
-    add(fx, riser(3.0), 4.0)
-    add(fx, impact(), 7.0, 1.0)
-    add(fx, whoosh(0.9), 17.5)
-    add(fx, riser(4.0, 200, 8000), 30.0, 1.0)
-    add(fx, impact(), 34.0, 1.0)
-    add(fx, whoosh(0.9), 45.5)
-    add(fx, impact(), 46.0, 0.7)
-    for s in (11.0, 14.5, 38.0, 41.0):
-        add(fx, whoosh(0.6), s - 0.3, 0.7)
+    add(fx, riser(2.5), B2 - 2.5)
+    add(fx, impact(), B2, 1.0)
+    add(fx, whoosh(0.8), B3 - 0.5)
+    add(fx, riser(B4 - T3C, 200, 8000), T3C, 1.0)
+    add(fx, impact(), B4, 1.0)
+    add(fx, whoosh(0.8), B5 - 0.5)
+    add(fx, impact(), B5, 0.7)
+    add(fx, riser(1.5), B2 * 0.30 - 1.5, 0.5)
+    add(fx, riser(1.5), B2 * 0.56 - 1.5, 0.5)
     # final hit chord + tail
     for n in [45, 57, 60, 64, 69, 72, 76]:
-        add(mus, piano(n, 4.0, 0.9), 56.0)
-    add(mus, pad([69, 72, 76, 81], 4.0, 2500), 56.0, 1.3)
-    add(fx, impact(), 56.0, 0.8)
+        add(mus, piano(n, 4.0, 0.9), FINAL)
+    add(mus, pad([69, 72, 76, 81], 4.0, 2500), FINAL, 1.3)
+    add(fx, impact(), FINAL, 0.8)
 
     mix = reverb(mus, 2.4, 0.32) + drums * 0.85 + reverb(fx, 1.5, 0.2)
     # fade
     tt = np.arange(N) / SR
-    mix *= np.minimum(1, tt / 0.3) * np.clip((DUR - tt) / 2.5, 0, 1) ** 1.2
+    mix *= np.minimum(1, tt / 0.3) * np.clip((DUR - tt) / 1.5, 0, 1) ** 1.2
     mix /= np.max(np.abs(mix)) + 1e-9
     mix = np.tanh(mix * 1.4) / np.tanh(1.4)
     # stereo widen: slight delay on right for the reverb-ish width

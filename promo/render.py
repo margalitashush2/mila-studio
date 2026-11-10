@@ -20,6 +20,9 @@ from script import PHRASES
 A = sys.argv[1]
 OUTMP4 = sys.argv[2]
 W, H, FPS, DUR = 1080, 1920, 30, 60.0
+VO_DIR = os.environ.get('VO_DIR', 'vo2')
+BPM = 120
+BEAT = 60 / BPM
 NF = int(DUR * FPS)
 FONTS = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'public', 'fonts')
 LINK_TEXT = os.environ.get('LINK_TEXT', '')  # optional: text for the join-link box
@@ -301,39 +304,52 @@ def card(img, maxw, maxh, radius=40, border=GOLD, bw=4):
 
 # ----------------------------------------------------------------- assets
 
-PRODUCTS = {
-    'fridge': ('t001', (372, 700, 1100, 1670), 'מקרר'),
-    'bed': ('t009', (372, 1235, 1102, 2215), 'מיטה + מזרן'),
-    'sofa': ('t013', (290, 870, 1102, 1328), 'מערכת ישיבה'),
-    'headboard': ('t025', (372, 955, 1102, 1922), 'ראש מיטה ושידות'),
-    'darksofa': ('t027', (290, 770, 1102, 1584), 'ספה פינתית'),
-    'shelf': ('t031', (372, 410, 1102, 1436), 'כוננית'),
-    'oven': ('t033', (372, 560, 1102, 1570), 'תנור גז'),
-    'speakers': ('t035', (372, 670, 1102, 1646), 'רמקולים'),
-    'bunk': ('t037', (292, 828, 1102, 1432), 'מיטת קומותיים'),
-    'books': ('t041', (290, 1094, 1102, 1888), 'ספרי קודש'),
-    'wardrobe': ('t049', (372, 450, 1102, 1470), 'ארון 6 דלתות'),
-    'leather': ('t049', (292, 1598, 1102, 2202), 'ספת עור'),
-    'greysofa': ('t051', (372, 1146, 1102, 2160), 'ספה מעוצבת'),
+# high-quality lifestyle photos (Unsplash license), name -> (focus x 0..1, label)
+PHOTOS = {
+    'bedroom': (0.45, 'חדר שינה'),
+    'cozy': (0.55, 'פינת ישיבה'),
+    'fridge': (0.45, 'מקרר'),
+    'washer': (0.50, 'מכונת כביסה'),
+    'kitchen': (0.80, 'תנור ומיקרוגל'),
+    'sectional': (0.45, 'ספה פינתית'),
+    'armchair': (0.40, 'כורסה'),
+    'dresser': (0.62, 'שידה'),
+    'shelves': (0.50, 'כוננית'),
+    'kitchen2': (0.55, 'מוצרי חשמל'),
+    'bedroom2': (0.45, 'מיטה זוגית'),
+    'sofa': (0.45, 'ספה'),
+    'sunsofa': (0.50, 'ספה'),
+    'livingdining': (0.40, 'פינת אוכל'),
 }
 
+
+def load_photo(name, maxw=1800):
+    im = cv2.imread(f'{A}/un/hi/{name}.jpg')[:, :, ::-1]
+    k = min(1.0, maxw / im.shape[1])
+    if k < 1:
+        im = cv2.resize(im, None, fx=k, fy=k, interpolation=cv2.INTER_AREA)
+    return grade(im.astype(np.float32) / 255.0)
+
+
+def cover_focus(img, w, h, fx=0.5):
+    ih, iw = img.shape[:2]
+    k = max(w / iw, h / ih)
+    r = cv2.resize(img, (int(iw * k) + 1, int(ih * k) + 1), interpolation=cv2.INTER_AREA if k < 1 else cv2.INTER_CUBIC)
+    x0 = int(np.clip(fx * r.shape[1] - w / 2, 0, r.shape[1] - w))
+    y0 = (r.shape[0] - h) // 2
+    return np.ascontiguousarray(r[y0:y0 + h, x0:x0 + w])
+
+
 print('loading assets', flush=True)
-IMG = {k: load_crop(v[0], v[1]) for k, v in PRODUCTS.items()}
-BIG = {k: cover(IMG[k], int(W * 1.25), int(H * 1.25)) for k in ('greysofa', 'bed', 'wardrobe')}
-
-
-def blurred_bg(img, dark=0.42):
-    c = cover(img, W // 4, H // 4, 1.1)
-    c = cv2.GaussianBlur(c, (0, 0), 9)
-    c = cv2.resize(c, (W, H), interpolation=cv2.INTER_CUBIC)
-    return c * dark
-
-
-MONTAGE = ['fridge', 'sofa', 'shelf', 'oven', 'wardrobe', 'bunk', 'speakers']
-BLUR = {k: blurred_bg(IMG[k]) for k in set(MONTAGE + ['bed', 'leather', 'books', 'headboard'])}
-CARDS = {k: card(IMG[k], 860, 1060) for k in set(MONTAGE + ['leather', 'oven', 'fridge'])}
-SMALLCARD = {k: card(IMG[k], 430, 520, radius=30, bw=3) for k in ('fridge', 'leather', 'oven', 'darksofa', 'bed')}
-LABELS = {k: chip(PRODUCTS[k][2], 46) for k in PRODUCTS}
+IMG = {k: load_photo(k) for k in PHOTOS}
+BIG = {k: cover_focus(IMG[k], int(W * 1.2), int(H * 1.2), PHOTOS[k][0]) for k in PHOTOS}
+MONTAGE = ['fridge', 'sofa', 'kitchen', 'bedroom2', 'washer', 'armchair', 'sectional', 'dresser', 'kitchen2', 'shelves',
+           'sunsofa', 'livingdining']
+SMALLCARD = {k: card(IMG[k], 430, 520, radius=30, bw=3) for k in ('fridge', 'washer', 'armchair')}
+LABELS = {k: chip(PHOTOS[k][1], 46) for k in PHOTOS}
+# darker bottom for subtitle legibility
+_g = np.clip((np.arange(H, dtype=np.float32) - H * 0.62) / (H * 0.38), 0, 1)
+BOTTOM_SHADE = (1 - 0.55 * _g ** 1.3)[:, None, None]
 
 logo_img = Image.open(f'{A}/logo.png').convert('RGBA')
 
@@ -371,24 +387,38 @@ SCR_MASK = np.asarray(rounded_mask(SCR_W, SCR_H, PHONE_R)).astype(np.float32)[..
 
 # ----------------------------------------------------------------- VO timeline
 
-VO = json.load(open(f'{A}/vo/vo.json'))
-S3 = 19.55  # section 2 VO is ~11.8s; real-status section starts here
-SEC_WIN = {1: (0.35, 7.0), 2: (7.3, S3 - 0.05), 3: (S3 + 0.45, 33.7), 4: (34.45, 45.8), 5: (46.6, 58.6)}
-GAP = {1: 0.35, 2: 0.3, 3: 0.35, 4: 0.3, 5: 0.35}
+VOG = json.load(open(f'{A}/{VO_DIR}/vo_groups.json'))
+G = {tuple(g['ids'])[0]: g for g in VOG}          # keyed by first phrase id
+
+
+def g_end(first):  # end of speech inside a group (seconds, relative)
+    return max(v[1] for v in G[first]['phrases'].values())
+
+
+B = {1: 0.0}
+GSTART = {}
+GSTART['1a'] = 0.25
+B[2] = GSTART['1a'] + g_end('1a') + 0.35
+GSTART['2a'] = B[2] + 0.2
+B[3] = GSTART['2a'] + g_end('2a') + 0.3
+GSTART['3a'] = B[3] + 0.5
+REC_START = B[3] + 0.5
+# real recording stays fully visible >= ~7s, then the 15-minute timer takes over (recording keeps playing dimmed)
+GSTART['3c'] = max(GSTART['3a'] + g_end('3a') + 0.5, REC_START + 7.0)
+B[4] = GSTART['3c'] + g_end('3c') + 0.6
+GSTART['4a'] = B[4] + 0.3
+B[5] = GSTART['4a'] + g_end('4a') + 0.45
+GSTART['5a'] = B[5] + 0.35
+END = round(GSTART['5a'] + g_end('5a') + 3.4, 2)
+DUR = END
+NF = int(round(DUR * FPS))
 TL = {}
-for sec, (s0, s1) in SEC_WIN.items():
-    ph = [p for p in PHRASES if p['sec'] == sec]
-    total = sum(VO[p['id']]['dur'] for p in ph)
-    gap = GAP[sec]
-    if total + gap * (len(ph) - 1) > s1 - s0:
-        gap = max(0.12, (s1 - s0 - total) / max(1, len(ph) - 1))
-    t = s0
-    for p in ph:
-        if p['id'] == '3c':  # sync with the 15-minute timer; keep the real recording on screen >= 8s
-            t = max(t, 27.0)
-        TL[p['id']] = (t, t + VO[p['id']]['dur'])
-        t += VO[p['id']]['dur'] + gap
-json.dump(TL, open(f'{A}/timeline.json', 'w'), indent=1)
+for first, g in G.items():
+    for pid, (a_, b_) in g['phrases'].items():
+        TL[pid] = (GSTART[first] + a_, GSTART[first] + b_)
+json.dump({'phr': TL, 'B': B, 'END': END, 'groups': {k: [GSTART[k], f"{VO_DIR}/{G[k]['file']}"] for k in G},
+           'bpm': BPM}, open(f'{A}/timeline.json', 'w'), indent=1)
+print('timeline', {k: round(v, 2) for k, v in B.items()}, 'END', END, flush=True)
 T = lambda pid: TL[pid][0]
 TE = lambda pid: TL[pid][1]
 SUBS = {p['id']: text_sprite(p['sub'], H7, 62, fill=(255, 255, 255), stroke=4, stroke_fill=(8, 10, 18), shadow=0.8)
@@ -588,115 +618,124 @@ def subtitles(dst, t, y):
             continue
         t0, t1 = TL[p['id']]
         nxt = min([TL[q['id']][0] for q in PHRASES if TL[q['id']][0] > t0] + [t1 + 0.6])
-        t1 = min(t1 + 0.35, nxt - 0.02, {1: 7.0, 2: S3, 3: 34.0, 4: 46.0, 5: 60.0}[p['sec']] - 0.05)
+        t1 = min(t1 + 0.35, nxt - 0.02, {1: B[2], 2: B[3], 3: B[4], 4: B[5], 5: END}[p['sec']] - 0.05)
         if t0 - 0.1 <= t <= t1:
             a = eo(prog(t, t0 - 0.1, t0 + 0.12)) * (1 - prog(t, t1 - 0.12, t1))
             dy = (1 - eo(prog(t, t0 - 0.1, t0 + 0.2))) * 24
             place(dst, SUBS[p['id']], W / 2, y + dy, op=a)
 
 
+def whip(a, b, x, dirn=1):
+    """directional-blur crossfade between two full frames, x in 0..1"""
+    k = int(1 + 60 * math.sin(math.pi * x))
+    mixf = a * (1 - x) + b * x
+    if k > 2:
+        mixf = cv2.blur(mixf, (k, 1))
+    return mixf
+
+
+def shot(name, x, s0, s1, dx0=0, dx1=0):
+    return kenburns(BIG[name], x, s0, s1, dx0, dx1, 0, 0)
+
+
 def scene1(t):
-    # 0 - 7 : cinematic hook
-    if t < 2.6:
-        x = t / 2.6
-        f = kenburns(BIG['greysofa'], eio(x), 1.18, 1.03, -40, 30, 20, -10)
-    elif t < 4.7:
-        x = (t - 2.6) / 2.1
-        f = kenburns(BIG['bed'], eo(x), 1.0, 1.12, 30, -30, 0, -20)
-    else:
-        x = (t - 4.7) / 2.3
-        f = kenburns(BIG['wardrobe'], x, 1.05, 1.16, 0, 0, 0, 0) * 0.55
-        f = cv2.GaussianBlur(f, (0, 0), 2 + 10 * eo(prog(t, T('1b') - 0.3, T('1b') + 0.2)))
-    # whip crossfades
-    for tc, nxt in ((2.6, 'bed'), (4.7, 'wardrobe')):
-        if tc - 0.18 < t < tc:
-            a = prog(t, tc - 0.18, tc)
-            f = f * (1 - a) + a * kenburns(BIG[nxt], 0, 1.0 if nxt == 'bed' else 1.05, 1.0)
+    # hook: three cinematic shots, then 0 ₪
+    t1b = T('1b')
+    c1, c2 = B[2] * 0.30, B[2] * 0.56
+    shots = [('cozy', 0, c1, 1.12, 1.0, -40, 30), ('bedroom', c1, c2, 1.0, 1.12, 40, -30),
+             ('kitchen', c2, B[2], 1.04, 1.16, 0, 0)]
+    for j, (nm, a0, a1, s0, s1, d0, d1) in enumerate(shots):
+        if a0 <= t < a1 or (j == 2 and t >= a0):
+            f = shot(nm, eo(prog(t, a0, a1)) if j < 2 else prog(t, a0, a1), s0, s1, d0, d1)
+            # incoming whip from previous shot
+            if j > 0 and t - a0 < 0.16:
+                pn = shots[j - 1]
+                prev = shot(pn[0], 1.0, pn[3], pn[4], pn[5], pn[6])
+                f = whip(prev, f, prog(t, a0, a0 + 0.16), 1 if j % 2 else -1)
+            break
     f = np.ascontiguousarray(f)
-    # floating product cards in the third shot (electric + furniture)
-    if t >= 4.7:
-        x = t - 4.7
-        dim = eo(prog(t, T('1b') - 0.2, T('1b') + 0.3))
-        for i, (k, cx, cy, rot, d) in enumerate((('fridge', 270, 640, -6, 0.0), ('leather', 810, 980, 5, 0.15),
-                                                ('oven', 300, 1330, 4, 0.3))):
-            a = eo(prog(x, d, d + 0.45)) * (1 - 0.65 * dim)
-            place(f, SMALLCARD[k], cx + (1 - eo(prog(x, d, d + 0.5))) * (-200 if cx < 540 else 200),
-                  cy - x * 30, s=1.0 - 0.1 * dim, rot=rot, op=a)
-        # 0 ₪
-        x1 = t - (T('1b') - 0.05)
+    if t >= c2:
+        dim = eo(prog(t, t1b - 0.25, t1b + 0.25))
+        f *= 1 - 0.45 * dim
+        if dim > 0:
+            f = cv2.GaussianBlur(f, (0, 0), 0.5 + 8 * dim)
+        x = t - c2
+        for i, (k, cx, cy, rot, d) in enumerate((('fridge', 270, 600, -6, 0.0), ('washer', 820, 980, 5, 0.12),
+                                                ('armchair', 290, 1330, 4, 0.24))):
+            a = eo(prog(x, d, d + 0.35)) * (1 - 0.7 * dim)
+            place(f, SMALLCARD[k], cx + (1 - eo(prog(x, d, d + 0.4))) * (-220 if cx < 540 else 220),
+                  cy - x * 40, s=1.0 - 0.1 * dim, rot=rot, op=a)
+        x1 = t - (t1b - 0.05)
         if x1 >= 0:
-            s = lerp(2.4, 1.0, spring(x1 * 1.6, 6, 1.6))
+            s = lerp(2.4, 1.0, spring(x1 * 1.8, 6, 1.6))
             zero = text_sprite('0 ₪', H9, 330, gradient=(GOLD_L, GOLD, GOLD_D), glow=(255, 190, 80, 1.3), shadow=0.9)
-            place(f, zero, W / 2, 860, s=s, op=eo(prog(x1, 0, 0.12)))
-            flash(f, t, T('1b') + 0.05, 0.3, 0.55)
-    # warm light leaks drifting
-    leak(f, t, W * (0.1 + 0.25 * t / 7), H * 0.25, 700, 0.18)
-    if 2.4 < t < 2.9:
-        leak(f, t, W * 0.8, H * 0.5, 900, 0.5 * math.sin(math.pi * prog(t, 2.4, 2.9)))
-    if 4.5 < t < 5.0:
-        leak(f, t, W * 0.2, H * 0.6, 900, 0.5 * math.sin(math.pi * prog(t, 4.5, 5.0)))
-    # fade in from black
-    f *= eo(prog(t, 0, 0.6))
+            place(f, zero, W / 2, 860, s=s, op=eo(prog(x1, 0, 0.1)))
+            flash(f, t, t1b + 0.05, 0.25, 0.5)
+    leak(f, t, W * (0.1 + 0.4 * t / B[2]), H * 0.25, 700, 0.18)
+    for tc in (c1, c2):
+        if tc - 0.2 < t < tc + 0.25:
+            leak(f, t, W * 0.75, H * 0.5, 900, 0.45 * math.sin(math.pi * prog(t, tc - 0.2, tc + 0.25)))
+    f *= BOTTOM_SHADE
+    f *= eo(prog(t, 0, 0.4))
+    if t > B[2] - 0.12:
+        f *= 1 - 0.6 * prog(t, B[2] - 0.12, B[2])
     return f
 
 
-BADGES = [('מוצרים איכותיים', '2b', 0, '✓'), ('תקינים לחלוטין', '2b', 0.9, '✓'), ('באהבה ובחינם', '2c', 1.0, '♥')]
+BADGES = [('מוצרים איכותיים', '2b', 0, '✓'), ('תקינים לחלוטין', '2b', 0.7, '✓'), ('באהבה ובחינם', '2c', 0.8, '♥')]
 BADGE_SPR = {b[0]: chip(b[0], 40, bg=(15, 22, 40, 225), fg=GOLD_L, outline=GOLD + (255,), fname=H7, icon=b[3],
                         icon_col=GOLD if b[3] == '✓' else (235, 70, 90)) for b in BADGES}
+ITEM = 2 * BEAT  # one product per 2 beats
+
+
+def montage_frame(i, x):
+    k = MONTAGE[i % len(MONTAGE)]
+    dirn = 1 if i % 2 == 0 else -1
+    return shot(k, clamp(x / ITEM), 1.12, 1.02, 40 * dirn, -40 * dirn), k
 
 
 def scene2(t):
-    # 7 - 18 : brand intro + rhythmic montage
-    beat = 0.625
-    m0 = 9.5
+    # brand flash + rhythmic full-bleed montage
+    t0 = B[2]
+    m0 = t0 + 1.5
     if t < m0:
         f = lux(t)
         particles(f, t)
-        x = t - 7.0
-        a = eo(prog(x, 0.0, 0.7))
-        s = lerp(1.12, 1.0, eo(prog(x, 0, 1.6)))
+        x = t - t0
+        a = eo(prog(x, 0.0, 0.45))
+        s = lerp(1.1, 1.0, eo(prog(x, 0, 1.2)))
         place(f, LOGO_GLOW, W / 2, 800, s=s, op=a * (0.45 + 0.2 * math.sin(t * 3)))
         place(f, LOGO_BIG, W / 2, 800, s=s, op=a)
-        # glint sweep across logo
-        gx = lerp(-300, W + 300, prog(x, 0.5, 1.6))
-        if 0.5 < x < 1.6:
+        if 0.3 < x < 1.2:
+            gx = lerp(-300, W + 300, prog(x, 0.3, 1.2))
             band = np.exp(-((xx[300:1300] - gx - (yy[300:1300] - 800) * 0.35) / 60) ** 2)[..., None]
             lg = np.zeros((1000, W, 3), np.float32)
             place_rgb(lg, LOGO_BIG, W / 2, 500, s)
             f[300:1300] += lg * band * 0.6
-        flash(f, t, 7.0, 0.3, 0.5)
-        if t > m0 - 0.25:  # push out
-            f *= 1 - prog(t, m0 - 0.25, m0) * 0.8
+        flash(f, t, t0, 0.25, 0.5)
+        if t > m0 - 0.15:
+            f *= 1 - prog(t, m0 - 0.15, m0) * 0.8
+        f *= BOTTOM_SHADE
         return f
-    i = min(len(MONTAGE) - 1, int((t - m0) / (2 * beat)))
-    k = MONTAGE[i]
-    ts = m0 + i * 2 * beat
+    i = int((t - m0) / ITEM)
+    ts = m0 + i * ITEM
     x = t - ts
-    f = BLUR[k].copy()
-    f = f * (1 + 0.15 * math.exp(-x * 6))
-    particles(f, t, 0.6)
-    dirn = 1 if i % 2 == 0 else -1
-    e = eo(prog(x, 0, 0.32))
-    cx = W / 2 + (1 - e) * 420 * dirn
-    place(f, CARDS[k], cx, 860 + (1 - e) * 60, s=lerp(1.18, 1.0, e) + x * 0.02, rot=(1 - e) * 5 * dirn, op=e)
-    # outgoing card
-    if i > 0 and x < 0.25:
-        kp = MONTAGE[i - 1]
-        eo_ = eo(prog(x, 0, 0.25))
-        place(f, CARDS[kp], W / 2 - eo_ * 520 * dirn, 860, s=1.0 + 2 * beat * 0.02 - 0.1 * eo_, rot=-eo_ * 6 * dirn,
-              op=1 - eo_)
-    lab = LABELS[k]
-    place(f, lab, W / 2, 1440, s=lerp(0.6, 1.0, spring(prog(x, 0.12, 0.6), 7, 2)), op=eo(prog(x, 0.1, 0.3)))
-    # badges top
+    f, k = montage_frame(i, x)
+    if i > 0 and x < 0.14:
+        prev, _ = montage_frame(i - 1, ITEM)
+        f = whip(prev, f, prog(x, 0, 0.14))
+    f = np.ascontiguousarray(f) * 0.92
+    f *= BOTTOM_SHADE
+    place(f, LABELS[k], W / 2, 1420, s=lerp(0.6, 1.0, spring(prog(x, 0.08, 0.5), 7, 2)), op=eo(prog(x, 0.06, 0.22)))
     yb = 230
     shown = [b for b in BADGES if t >= T(b[1]) + b[2]]
     for j, b in enumerate(shown[-2:] if len(shown) > 2 else shown):
         tb = T(b[1]) + b[2]
-        y = yb + j * 92
-        place(f, BADGE_SPR[b[0]], W / 2, y, s=lerp(0.7, 1, spring(prog(t, tb, tb + 0.5))), op=eo(prog(t, tb, tb + 0.2)))
-    flash(f, t, ts, 0.18, 0.25)
-    if t > S3 - 0.3:
-        f *= 1 - prog(t, S3 - 0.3, S3) * 0.85
+        place(f, BADGE_SPR[b[0]], W / 2, yb + j * 92, s=lerp(0.7, 1, spring(prog(t, tb, tb + 0.5))),
+              op=eo(prog(t, tb, tb + 0.2)))
+    leak(f, t, W * 0.85, H * 0.15, 650, 0.12)
+    if t > B[3] - 0.2:
+        f *= 1 - prog(t, B[3] - 0.2, B[3]) * 0.85
     return f
 
 
@@ -721,7 +760,7 @@ LIVE = chip('צילום מסך אמיתי מהסטטוס', 30, bg=(220, 40, 60, 
 
 
 def rec_index(t):
-    r0 = S3 + 0.5
+    r0 = REC_START
     k = int((t - r0) * 30)
     return int(np.clip(k, 0, REC_FRAMES - 1))
 
@@ -749,7 +788,7 @@ def scene3(t):
     f = lux(t)
     particles(f, t, 0.5)
     t3c = T('3c')
-    x = t - S3
+    x = t - B[3]
     rise = eo(prog(x, 0.0, 0.7))
     dimp = eo(prog(t, t3c - 0.1, t3c + 0.6))
     pcx, pcy = W / 2, 975 + (1 - rise) * 1200
@@ -792,9 +831,9 @@ def scene3(t):
     # 15-minute window
     if t >= t3c - 0.1:
         timer(f, t, t3c)
-    flash(f, t, S3, 0.25, 0.3)
-    if t > 33.75:
-        f *= 1 - prog(t, 33.75, 34.0) * 0.6
+    flash(f, t, B[3], 0.25, 0.3)
+    if t > B[4] - 0.25:
+        f *= 1 - prog(t, B[4] - 0.25, B[4]) * 0.6
     return f
 
 
@@ -803,7 +842,7 @@ T_BIG = {}
 
 def timer(f, t, t0):
     x = t - t0
-    tend = 33.4
+    tend = B[4] - 0.55
     pr = clamp((t - (t0 + 0.4)) / (tend - (t0 + 0.4)))  # 0..1 elapsed
     app = spring(prog(x, 0, 0.7), 6, 2)
     cx, cy, R = W / 2, 860, 300
@@ -855,7 +894,7 @@ def scene4(t):
     f = lux(t, (0.035, 0.0, 0.05))
     place(f, RAYS_SPR, W / 2, 760, s=1.0 + 0.05 * math.sin(t), rot=t * 8, op=0.8, add=True)
     particles(f, t, 1.0)
-    x = t - 34.0
+    x = t - B[4]
     t4a, t4b, t4c = T('4a'), T('4b'), T('4c')
     # punch text
     a = eo(prog(x, 0.05, 0.2)) * (1 - prog(t, t4b - 0.15, t4b + 0.15))
@@ -883,9 +922,9 @@ def scene4(t):
             place(f, chip(lab, 40, bg=(15, 22, 40, 230), fg=GOLD_L, outline=GOLD + (255,)), cx, cy + 230,
                   op=eo(prog(t, t0 + 0.3, t0 + 0.6)))
         confetti(f, t, t0, cx, cy, n=50, seed=j + 1)
-    flash(f, t, 34.0, 0.3, 0.6)
-    if t > 45.7:
-        f *= 1 - prog(t, 45.7, 46.0) * 0.9
+    flash(f, t, B[4], 0.3, 0.6)
+    if t > B[5] - 0.25:
+        f *= 1 - prog(t, B[5] - 0.25, B[5]) * 0.9
     return f
 
 
@@ -943,9 +982,10 @@ def scene5(t):
     # 46 - 60 : logo + join + end card
     f = lux(t)
     particles(f, t, 1.0)
-    x = t - 46.0
-    # phase A: big logo reveal 46-50.2, then move up
-    mv = eio(prog(x, 4.0, 4.8))
+    te = T('5c') + 0.6
+    x = t - B[5]
+    # phase A: big logo reveal, moves up when "join now" is said
+    mv = eio(prog(t, T('5b') - 0.3, T('5b') + 0.4))
     ly = lerp(810, 400, mv)
     ls = lerp(1.0, 0.56, mv)
     a = eo(prog(x, 0.1, 0.9))
@@ -964,7 +1004,7 @@ def scene5(t):
         x0, x1 = int(W / 2 - 420 * fl), int(W / 2 + 420 * fl)
         f[yline:yline + 3, x0:x1] = np.array(GOLD, np.float32) / 255
     # phase B: join card 50.5+
-    tj = 46.0 + 4.6
+    tj = T('5b') + 0.2
     if t > tj:
         sp = spring(prog(t, tj, tj + 0.8), 6, 2)
         cy = 790
@@ -983,19 +1023,18 @@ def scene5(t):
         px = W / 2 + 450 - 140
         place(f, ring, px, cy + (1 - clamp(sp)) * 120, op=clamp(sp * 2))
         # add button tapped
-        tb = tj + 1.5
+        tb = tj + 1.1
         bx, by = W / 2, cy + 185
         btn = ADDED_BTN if t > tb + 0.25 else ADD_BTN
         place(f, btn, bx, by, s=1.35 * (1 - 0.12 * math.sin(math.pi * prog(t, tb, tb + 0.25))) * clamp(sp),
-              op=eo(prog(t, tj + 0.4, tj + 0.7)) * (1 - prog(t, 53.3, 53.6)))
+              op=eo(prog(t, tj + 0.4, tj + 0.7)) * (1 - prog(t, te - 0.35, te - 0.05)))
         rx = t - tb
         if 0 < rx < 0.6:
             ov = np.zeros((H, W), np.float32)
             cv2.circle(ov, (int(bx), int(by)), int(30 + 140 * rx), 1.0, 5, cv2.LINE_AA)
             aa = (1 - rx / 0.6) * 0.8
             f[:] = f * (1 - ov[..., None] * aa) + ov[..., None] * aa
-    # phase C: end card text 53.8+
-    te = 53.6
+    # phase C: end card text
     lines = [(text_sprite('גמ״ח דניאל אשוש', FR9, 96, gradient=(GOLD_L, GOLD, GOLD_D), shadow=0.8), 1040, 0.0),
              (text_sprite('חסד אמיתי. מוצרים איכותיים. הטבות שוות.', H7, 42, fill=CREAM, shadow=0.6), 1135, 0.35)]
     for spr, y, d in lines:
@@ -1010,29 +1049,29 @@ def scene5(t):
         place(f, text_sprite('לחצו על הקישור להצטרפות', H4, 32, fill=GOLD_L), W / 2, 1405, op=a)
         place(f, LINK_BOX, W / 2, 1495, op=a)
         place(f, text_sprite('לפרטים: 050-816-5833', H7, 38, fill=GOLD_L), W / 2, 1600, op=a)
-    flash(f, t, 46.0, 0.35, 0.5)
+    flash(f, t, B[5], 0.3, 0.5)
     # final fade
-    f *= 1 - eio(prog(t, 59.2, 60.0))
+    f *= 1 - eio(prog(t, END - 0.7, END))
     return f
 
 
 def frame(i):
     t = i / FPS
-    if t < 7.0:
+    if t < B[2]:
         f = scene1(t)
         sub_y = 1640
-    elif t < S3:
+    elif t < B[3]:
         f = scene2(t)
         sub_y = 1660
-    elif t < 34.0:
+    elif t < B[4]:
         f = scene3(t)
         sub_y = 1740
-    elif t < 46.0:
+    elif t < B[5]:
         f = scene4(t)
         sub_y = 1640
     else:
         f = scene5(t)
-        sub_y = 1700
+        sub_y = 1765
     subtitles(f, t, sub_y)
     f *= VIGNETTE
     f += GRAIN[i % len(GRAIN)]
