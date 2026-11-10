@@ -25,3 +25,4 @@ dist-ssr
 
 *.tmp.mjs
 dist-artifact/
+__pycache__/
