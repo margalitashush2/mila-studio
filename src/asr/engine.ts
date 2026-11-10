@@ -80,6 +80,26 @@ function clearOldModelStore() {
   }
 }
 
+const PENDING_KEY = 'mila-quality-loading';
+function markPending(on: boolean) {
+  try {
+    if (on) localStorage.setItem(PENDING_KEY, String(Date.now()));
+    else localStorage.removeItem(PENDING_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+/** True if a previous load of the accurate engine never finished (the page was killed). Clears the mark. */
+export function consumeCrashedLoad(): boolean {
+  try {
+    const v = localStorage.getItem(PENDING_KEY);
+    localStorage.removeItem(PENDING_KEY);
+    return !!v;
+  } catch {
+    return false;
+  }
+}
+
 const abs = (u: string) => new URL(u, document.baseURI).toString();
 
 export async function modelIsDownloaded(): Promise<boolean> {
@@ -222,6 +242,8 @@ async function ensureWorker(onStage: (s: EngineStage) => void): Promise<Worker> 
   if (worker && loadedDevice) return worker;
   const { files, wasm, m } = await ensureModelFiles(onStage);
   onStage({ stage: 'loading' });
+  // If the phone kills the page while the big engine loads, the next start sees this mark and uses the light one.
+  if (choice === 'quality') markPending(true);
   worker = new Worker(new URL('./worker.ts', import.meta.url), { type: 'module' });
   try {
     const wasmBuf = await wasm.arrayBuffer();
@@ -232,7 +254,9 @@ async function ensureWorker(onStage: (s: EngineStage) => void): Promise<Worker> 
       [wasmBuf],
     );
     loadedDevice = r.device;
+    markPending(false);
   } catch (e) {
+    markPending(false);
     worker.terminate();
     worker = null;
     throw new Error('לא הצלחנו להפעיל את מנוע התמלול במכשיר הזה: ' + (e as Error).message);
@@ -270,7 +294,31 @@ export function speechWindows(audio: Float32Array, rate: number, max = 28): [num
   return out;
 }
 
-export async function transcribeOnDevice(audio: Float32Array, onStage: (s: EngineStage) => void): Promise<Transcript> {
+/**
+ * Transcribe with the chosen engine. If the accurate (large) engine can't run on this phone,
+ * fall back to the light engine automatically instead of failing.
+ */
+export async function transcribeOnDevice(
+  audio: Float32Array,
+  onStage: (s: EngineStage) => void,
+  onNote?: (msg: string) => void,
+): Promise<Transcript> {
+  try {
+    return await transcribeWith(audio, onStage);
+  } catch (e) {
+    const msg = (e as Error)?.message ?? String(e);
+    if (choice !== 'quality' || /ההורדה|HTTP/.test(msg)) throw e;
+    onNote?.('המנוע המדויק כבד מדי לטלפון הזה, עוברים למנוע הקל. (' + msg.slice(0, 120) + ')');
+    setEngineChoice('light');
+    try {
+      return await transcribeWith(audio, onStage);
+    } catch (e2) {
+      throw new Error(`${(e2 as Error)?.message ?? e2}\n(המנוע המדויק נכשל קודם: ${msg.slice(0, 160)})`);
+    }
+  }
+}
+
+async function transcribeWith(audio: Float32Array, onStage: (s: EngineStage) => void): Promise<Transcript> {
   const w = await ensureWorker(onStage);
   const windows = speechWindows(audio, 16000);
   onStage({ stage: 'transcribe', done: 0, total: windows.length });

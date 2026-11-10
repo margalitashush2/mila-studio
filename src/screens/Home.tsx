@@ -89,7 +89,7 @@ export function Home({ go }: { go: (s: 'brand' | 'dictionary' | 'settings') => v
         )}
       </section>
 
-      <p className="version-tag">גרסה 11 · תיקון חכם ועריכת משפטים</p>
+      <p className="version-tag">גרסה 12</p>
       <nav className="links">
         <button className="link-tile" onClick={() => go('brand')}>{Icon.brand}<span>המיתוג שלי</span></button>
         <button className="link-tile" onClick={() => go('dictionary')}>{Icon.book}<span>מילון אישי</span></button>

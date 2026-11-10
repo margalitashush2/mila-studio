@@ -160,7 +160,10 @@ export async function runTranscription(capture: AudioCapture): Promise<void> {
         capture.close();
       }
     }
-    const transcript: Transcript = await transcribeOnDevice(audio!, onStage);
+    const transcript: Transcript = await transcribeOnDevice(audio!, onStage, (msg) => {
+      useApp.getState().showToast(msg);
+      void useApp.getState().setSettings({ engine: 'light' });
+    });
     transcript.words = applyDictionary(transcript.words, useApp.getState().dictionary);
     // Show the raw result right away, then let Claude correct it (spelling, context, punctuation).
     useApp.getState().edit((x) => (x.id === p.id ? { ...x, transcript, transcriptionJob: { status: 'polish', startedAt } } : x), false);

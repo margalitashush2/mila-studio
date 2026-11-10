@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import type { BrandKit, DictionaryEntry, Project } from '../core/types';
 import { db, type Settings, DEFAULT_SETTINGS } from '../services/db';
-import { setEngineChoice } from '../asr/engine';
+import { consumeCrashedLoad, setEngineChoice } from '../asr/engine';
 
 const HISTORY_LIMIT = 60;
 
@@ -75,6 +75,11 @@ export const useApp = create<AppState>((set, get) => ({
       db.getDictionary(),
       db.getBrand(),
     ]);
+    if (settings.engine === 'quality' && consumeCrashedLoad()) {
+      settings.engine = 'light';
+      void db.saveSettings(settings);
+      setTimeout(() => get().showToast('המנוע המדויק כבד מדי לטלפון הזה, עברנו למנוע הקל. אפשר לשנות בהגדרות.'), 800);
+    }
     setEngineChoice(settings.engine);
     set({ projects, settings, dictionary, brand, ready: true });
   },
